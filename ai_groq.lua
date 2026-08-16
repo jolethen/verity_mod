@@ -29,10 +29,15 @@ end
 function verity.trigger_ai_dialogue(player, trigger_text)
     local name = player:get_player_name()
 
+    -- Dynamic HTTP Handle Re-fetch (Fixes server load order bugs)
+    if not http then
+        http = minetest.request_http_api()
+    end
+
     -- Debug Check 1: Ensure HTTP Handle is initialized
     if not http then
         minetest.chat_send_player(name, "[Verity Debug] CRITICAL: HTTP API handle is NIL!")
-        minetest.chat_send_player(name, "[Verity Debug] Ensure 'secure.http_mods = verity_mod' is in minetest.conf AND restart the client.")
+        minetest.chat_send_player(name, "[Verity Debug] Ensure 'secure.http_mods = verity_mod' is formatted on a single line in minetest.conf and restart.")
         minetest.chat_send_player(name, "<Verity> " .. verity.get_fallback_text())
         return
     end

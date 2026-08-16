@@ -1,7 +1,11 @@
+-- Fallback built-in textures from Minetest's 'default' mod:
+-- Phase 1 (Observer): Sand (light/pale yellowish look)
+-- Phase 2 (Companion): Cobblestone (grey/rough look)
+-- Phase 3 (Aggressive): Obsidian (dark/corrupted look)
 local phase_textures = {
-    [1] = "verity_phase1.png",
-    [2] = "verity_phase2.png",
-    [3] = "verity_phase3.png"
+    [1] = "default_sand.png",
+    [2] = "default_stone.png",
+    [3] = "default_dirt.png"
 }
 
 minetest.register_entity("verity_mod:verity", {
@@ -10,7 +14,7 @@ minetest.register_entity("verity_mod:verity", {
         collisionbox = {-0.35, -0.35, -0.35, 0.35, 0.35, 0.35},
         visual = "sprite",
         visual_size = {x=1.5, y=1.5},
-        textures = {"verity_phase1.png"},
+        textures = {"default_sand.png"},
         glow = 3,
     },
     target_player = nil,
@@ -78,6 +82,7 @@ minetest.register_entity("verity_mod:verity", {
         if dist < 8 then
             verity.spawn_static_particles(player)
             if math.random() < 0.2 then
+                -- Calls fake footstep/chest sound function from effects.lua
                 verity.trigger_fake_sounds(player)
             end
         end

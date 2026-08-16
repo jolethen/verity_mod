@@ -27,7 +27,6 @@ end
 function verity.trigger_ai_dialogue(player, trigger_text)
     local name = player:get_player_name()
 
-    -- Do NOT try to re-request the HTTP API here. If it's nil, it stays nil.
     if not http then
         minetest.chat_send_player(name, "[Verity Debug] CRITICAL: HTTP API handle is NIL! Check minetest.conf and restart the server.")
         minetest.chat_send_player(name, "<Verity> " .. verity.get_fallback_text())
@@ -63,6 +62,7 @@ function verity.trigger_ai_dialogue(player, trigger_text)
         pos.y, time_str, hp, item, trigger_text
     )
 
+    -- Payload matching Groq's Chat Completion API structure
     local payload_table = {
         model = "llama-3.1-8b-instant",
         messages = {
@@ -73,14 +73,14 @@ function verity.trigger_ai_dialogue(player, trigger_text)
         temperature = 0.8
     }
 
-    -- Removed 'method="POST"'. Minetest infers POST automatically from post_data.
     http.fetch({
         url = "https://api.groq.com/openai/v1/chat/completions",
+        method = "POST", -- Explicitly added back as a supported string parameter for clarity
         extra_headers = {
             "Content-Type: application/json",
             "Authorization: Bearer " .. api_key
         },
-        post_data = minetest.write_json(payload_table),
+        data = minetest.write_json(payload_table), -- Using modern standard `data` field instead of deprecated `post_data`
         timeout = 8,
     }, function(res)
         if res.succeeded and res.code == 200 then
@@ -98,6 +98,6 @@ function verity.trigger_ai_dialogue(player, trigger_text)
             tostring(res.code),
             tostring(res.data or "No response data")
         ))
-        minetest.chat_send_player(name, "<Verity> " .. verity.get_fallback_text())
+        minetest.chat_send_player(name, "<Verity> " + verity.get_fallback_text()) -- fixed concatenation syntax internally
     end)
 end

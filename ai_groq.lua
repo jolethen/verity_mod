@@ -1,18 +1,16 @@
--- Fetch HTTP handle immediately on mod initialization
+-- Fetch HTTP handle strictly at LOAD TIME. It cannot be fetched anywhere else.
 local http = minetest.request_http_api()
 
 local function get_player_key(name)
-    -- 1. Check in-memory table
     if verity.keys and verity.keys[name] and verity.keys[name] ~= "" then
         return verity.keys[name]
     end
 
-    -- 2. Fallback to player metadata
     local player = minetest.get_player_by_name(name)
     if player then
         local k = player:get_meta():get_string("groq_api_key")
         if k and k ~= "" then
-            verity.keys[name] = k -- Sync to memory table
+            verity.keys[name] = k
             return k
         end
     end
@@ -29,20 +27,13 @@ end
 function verity.trigger_ai_dialogue(player, trigger_text)
     local name = player:get_player_name()
 
-    -- Dynamic HTTP Handle Re-fetch (Fixes server load order bugs)
+    -- Do NOT try to re-request the HTTP API here. If it's nil, it stays nil.
     if not http then
-        http = minetest.request_http_api()
-    end
-
-    -- Debug Check 1: Ensure HTTP Handle is initialized
-    if not http then
-        minetest.chat_send_player(name, "[Verity Debug] CRITICAL: HTTP API handle is NIL!")
-        minetest.chat_send_player(name, "[Verity Debug] Ensure 'secure.http_mods = verity_mod' is formatted on a single line in minetest.conf and restart.")
+        minetest.chat_send_player(name, "[Verity Debug] CRITICAL: HTTP API handle is NIL! Check minetest.conf and restart the server.")
         minetest.chat_send_player(name, "<Verity> " .. verity.get_fallback_text())
         return
     end
 
-    -- Debug Check 2: Retrieve API Key
     local api_key = get_player_key(name)
     if not api_key then
         minetest.chat_send_player(name, "[Verity Debug] FAIL: No API key found for player '" .. name .. "'. Use /verity <gsk_...>")
@@ -50,17 +41,14 @@ function verity.trigger_ai_dialogue(player, trigger_text)
         return
     end
 
-    minetest.chat_send_player(name, "[Verity Debug] Key verified (" .. string.sub(api_key, 1, 7) .. "...). Dispatching HTTP request to Groq...")
+    minetest.chat_send_player(name, "[Verity Debug] Key verified. Sending request to Groq...")
 
-    -- Context Gathering
     local pos = vector.round(player:get_pos())
     local hp = player:get_hp()
     local item = player:get_wielded_item():get_name()
     if item == "" then item = "Empty Hand" end
-    local raw_time = minetest.get_timeofday() or 0.5
-    local time_str = string.format("%.1f:00", raw_time * 24)
+    local time_str = string.format("%.1f:00", (minetest.get_timeofday() or 0.5) * 24)
 
-    -- Dynamic System Prompt (Sanity System)
     local system_prompt = "You are Verity, a cryptic psychological horror entity in Minetest. Keep replies strictly under 15 words."
     if hp > 15 then
         system_prompt = system_prompt .. " Personality: Calm, enigmatic, subtly disturbing."
@@ -75,7 +63,6 @@ function verity.trigger_ai_dialogue(player, trigger_text)
         pos.y, time_str, hp, item, trigger_text
     )
 
-    -- Build Payload
     local payload_table = {
         model = "llama-3.1-8b-instant",
         messages = {
@@ -86,15 +73,15 @@ function verity.trigger_ai_dialogue(player, trigger_text)
         temperature = 0.8
     }
 
+    -- Removed 'method="POST"'. Minetest infers POST automatically from post_data.
     http.fetch({
         url = "https://api.groq.com/openai/v1/chat/completions",
-        method = "POST",
         extra_headers = {
             "Content-Type: application/json",
             "Authorization: Bearer " .. api_key
         },
-        data = minetest.write_json(payload_table),
-        timeout = 5,
+        post_data = minetest.write_json(payload_table),
+        timeout = 8,
     }, function(res)
         if res.succeeded and res.code == 200 then
             local data = minetest.parse_json(res.data)
@@ -106,11 +93,10 @@ function verity.trigger_ai_dialogue(player, trigger_text)
             end
         end
 
-        -- Detailed Error Logging if fetch fails or returns bad status code
         minetest.chat_send_player(name, string.format(
-            "[Verity Debug] API Request Failed! Code: %s | Raw Error: %s",
+            "[Verity Debug] API Failed! Code: %s | Resp: %s",
             tostring(res.code),
-            tostring(res.data or "Timeout / Socket closed")
+            tostring(res.data or "No response data")
         ))
         minetest.chat_send_player(name, "<Verity> " .. verity.get_fallback_text())
     end)
